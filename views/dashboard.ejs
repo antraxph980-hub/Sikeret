@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><%= title %></title>
+    <link rel="stylesheet" href="/style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>A</text></svg>">
+</head>
+<body>
+    <div id="app">
+        <header class="header">
+            <div class="header-left">
+                <div class="logo-icon">A</div>
+                <div>
+                    <h1><%= title %></h1>
+                    <span class="subtitle">v<%= version %> · Account Security Platform</span>
+                </div>
+            </div>
+            <div class="header-right">
+                <span class="user-info">
+                    <span id="usernameDisplay"><%= user ? user.username : 'guest' %></span>
+                    <% if (user && user.isAdmin) { %>
+                    <span class="user-role admin">Admin</span>
+                    <% } else if (user && user.canCheck) { %>
+                    <span class="user-role user">User</span>
+                    <% } else { %>
+                    <span class="user-role no-access">No Access</span>
+                    <% } %>
+                </span>
+                <button id="logoutBtn" class="logout-btn">Logout</button>
+                <span id="statusBadge" class="badge status-badge">● IDLE</span>
+                <span class="badge port-badge">:8735</span>
+            </div>
+        </header>
+
+        <nav class="nav-bar">
+            <button class="nav-btn active" data-tab="menu">Dashboard</button>
+            <button class="nav-btn" data-tab="sessions">Sessions</button>
+            <button class="nav-btn" data-tab="settings">Settings</button>
+            <% if (user && user.isAdmin) { %>
+            <button class="nav-btn" data-tab="admin">Administration</button>
+            <% } %>
+        </nav>
+
+        <div class="content">
+            <!-- Dashboard Page -->
+            <div id="page-menu" class="page active">
+                <div class="card">
+                    <div class="card-row">
+                        <span class="card-title">Batch Processing</span>
+                        <span class="spacer"></span>
+                        <button id="btnFetch" class="btn btn-secondary">Fetch Token</button>
+                        <button id="btnCheckAll" class="btn btn-primary">Check All</button>
+                    </div>
+                    
+                    <div id="progressDisplay" class="progress-display">0 <span class="total">/ 0</span></div>
+                    
+                    <div class="stats-grid">
+                        <div class="stat-card valid">
+                            <span id="statValid" class="stat-number">0</span>
+                            <span class="stat-label">Valid</span>
+                        </div>
+                        <div class="stat-card two">
+                            <span id="stat2fa" class="stat-number">0</span>
+                            <span class="stat-label">2FA</span>
+                        </div>
+                        <div class="stat-card invalid">
+                            <span id="statInvalid" class="stat-number">0</span>
+                            <span class="stat-label">Invalid</span>
+                        </div>
+                        <div class="stat-card error">
+                            <span id="statError" class="stat-number">0</span>
+                            <span class="stat-label">Error</span>
+                        </div>
+                    </div>
+                    
+                    <div id="currentCombo" class="combo-display">Idle</div>
+                    <div class="progress-bar"><div id="progressFill" class="progress-fill"></div></div>
+                    
+                    <div class="pool-info"><span id="poolInfo">Pool: 0 tokens · Servers: 0</span></div>
+                    <div class="pool-bar-row">
+                        <div class="pool-bar"><div id="poolFill" class="pool-fill"></div></div>
+                        <span id="poolCount" class="pool-count">0</span>
+                    </div>
+                    <div id="lastToken" class="token-status">Last captcha: None</div>
+                    
+                    <% if (user && !user.canCheck) { %>
+                    <div style="margin-top:10px;padding:8px 12px;background:rgba(255,92,92,0.1);border-radius:6px;border-left:3px solid var(--accent-red);">
+                        <span style="color:var(--accent-red);font-size:12px;font-weight:500;">Access Restricted</span>
+                        <span style="color:var(--text-muted);font-size:11px;display:block;margin-top:2px;">You do not have permission to check accounts. Contact administrator.</span>
+                    </div>
+                    <% } %>
+                </div>
+
+                <div class="card">
+                    <div class="card-row">
+                        <span class="card-title">Combo List</span>
+                        <span class="spacer"></span>
+                        <span id="comboStats" class="combo-stats">0 lines</span>
+                    </div>
+                    <textarea id="comboInput" class="input-field mono" placeholder="user:password&#10;one pair per line"></textarea>
+                    <div style="display:flex;gap:8px;padding-top:10px;flex-wrap:wrap;">
+                        <button id="btnLoad" class="btn btn-secondary">Load</button>
+                        <button id="btnOpen" class="btn btn-secondary">Open File</button>
+                        <button id="btnCheck" class="btn btn-primary" style="margin-left:auto;">Check</button>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-row">
+                        <span class="card-title">Results</span>
+                        <span class="spacer"></span>
+                        <span id="resultHint" class="text-muted" style="font-size:11px;">Click a card to expand</span>
+                    </div>
+                    <div id="resultCards"></div>
+                </div>
+
+                <div class="card">
+                    <span class="card-title">Last API Response</span>
+                    <div id="lastApi" class="font-mono" style="font-size:11px;color:var(--text-secondary);padding-top:6px;word-break:break-all;">(none)</div>
+                </div>
+            </div>
+
+            <!-- Sessions Page -->
+            <div id="page-sessions" class="page">
+                <div class="card">
+                    <div class="card-row">
+                        <span class="dot green"></span>
+                        <span class="card-title">WAF Session</span>
+                        <span class="spacer"></span>
+                        <button id="btnSessionOpen" class="btn btn-secondary btn-sm">Open</button>
+                        <button id="btnSessionClose" class="btn btn-secondary btn-sm">Close</button>
+                    </div>
+                    <div id="sessionState" class="font-mono" style="font-size:11px;color:var(--text-secondary);padding-top:8px;">Step: IDLE · Tokens: 0 · Requests: 0</div>
+                    <div style="font-size:10px;color:var(--text-muted);padding-top:6px;font-family:monospace;line-height:1.6;">
+                        GET  /ping /status /tokens /log /last<br>
+                        POST /login /reset /batch
+                    </div>
+                    <div style="display:flex;align-items:center;gap:10px;padding-top:10px;">
+                        <span style="font-size:10px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;">Event Log</span>
+                        <span class="spacer"></span>
+                        <button id="btnCopyLog" class="btn btn-secondary btn-sm">Copy</button>
+                        <button id="btnClearLog" class="btn btn-secondary btn-sm">Clear</button>
+                    </div>
+                    <div class="log-container"><pre id="logOutput" class="font-mono"></pre></div>
+                </div>
+
+                <!-- Admin Only: Server Management -->
+                <% if (user && user.isAdmin) { %>
+                <div class="card">
+                    <div class="card-row">
+                        <span class="card-title">Token Servers</span>
+                        <span class="text-muted" style="font-size:10px;">(admin only)</span>
+                        <span class="spacer"></span>
+                        <button id="btnFetchToken" class="btn btn-secondary btn-sm">Fetch</button>
+                        <button id="btnProbe" class="btn btn-secondary btn-sm">Re-probe</button>
+                    </div>
+                    <div id="serverList" class="server-list"></div>
+                    <div style="display:flex;gap:8px;padding-top:10px;flex-wrap:wrap;">
+                        <input type="text" id="serverInput" class="input-field" placeholder="https://server:port/get-token" style="flex:1;min-width:200px;">
+                        <button id="btnAddServer" class="btn btn-primary btn-sm">Add Server</button>
+                    </div>
+                    <div style="font-size:10px;color:var(--text-muted);padding-top:6px;">Click a server to copy its URL</div>
+                </div>
+                <% } %>
+
+                <div class="card">
+                    <div class="card-row">
+                        <span class="card-title">Captured Tokens</span>
+                        <span class="spacer"></span>
+                        <span id="tokenCount" class="font-mono" style="font-size:14px;font-weight:600;color:var(--text-primary);">0</span>
+                    </div>
+                    <div style="font-size:10px;color:var(--text-muted);">ssxmod + type__3069 pairs from mtacc session</div>
+                </div>
+            </div>
+
+            <!-- Settings Page -->
+            <div id="page-settings" class="page">
+                <div class="card">
+                    <span class="card-title">Save Directory</span>
+                    <div style="font-size:11px;color:var(--text-muted);padding-top:4px;">Results are saved to this directory</div>
+                    <input type="text" id="saveDirInput" class="input-field mono" value="./output" style="margin-top:8px;">
+                    <div style="display:flex;gap:8px;padding-top:8px;flex-wrap:wrap;">
+                        <button id="btnSaveDir" class="btn btn-primary btn-sm">Save Directory</button>
+                        <button id="btnDefaultDir" class="btn btn-secondary btn-sm">Reset Default</button>
+                    </div>
+                    <div id="saveInfo" style="font-size:10px;color:var(--text-muted);padding-top:8px;">Save → ./output/valid.txt</div>
+                </div>
+
+                <div class="card">
+                    <div id="autoSaveToggle" style="display:flex;align-items:center;gap:12px;cursor:pointer;">
+                        <span class="card-title">Auto-Save</span>
+                        <span class="spacer"></span>
+                        <span id="autoSaveStatus" style="padding:2px 12px;border-radius:12px;font-size:11px;font-weight:600;background:var(--bg-input);">ON</span>
+                    </div>
+                    <div style="font-size:11px;color:var(--text-muted);padding-top:4px;">Automatically save results during checking</div>
+                </div>
+
+                <div class="card">
+                    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+                        <span class="card-title">Worker Threads</span>
+                        <span class="spacer"></span>
+                        <button id="btnThreadMinus" class="btn btn-secondary btn-sm" style="font-size:14px;padding:2px 12px;">−</button>
+                        <span id="threadCount" style="font-size:15px;font-weight:600;min-width:30px;text-align:center;">2</span>
+                        <button id="btnThreadPlus" class="btn btn-secondary btn-sm" style="font-size:14px;padding:2px 12px;">+</button>
+                    </div>
+                    <div style="font-size:11px;color:var(--text-muted);padding-top:4px;">Number of concurrent checking threads (1-6)</div>
+                </div>
+
+                <div class="card">
+                    <span class="card-title">Token Pool Capacity</span>
+                    <div style="display:flex;gap:6px;padding-top:8px;flex-wrap:wrap;">
+                        <button class="cap-btn" data-cap="1">1</button>
+                        <button class="cap-btn" data-cap="100">100</button>
+                        <button class="cap-btn" data-cap="500">500</button>
+                        <button class="cap-btn" data-cap="10000">10K</button>
+                        <button class="cap-btn" data-cap="-1">∞</button>
+                    </div>
+                    <div style="font-size:11px;color:var(--text-muted);padding-top:6px;">Maximum tokens stored in pool before checking</div>
+                </div>
+
+                <div class="card">
+                    <span class="card-title">Change Password</span>
+                    <div style="display:flex;gap:8px;padding-top:8px;flex-wrap:wrap;">
+                        <input type="password" id="oldPassword" class="input-field" placeholder="Current Password" style="flex:1;min-width:150px;">
+                        <input type="password" id="newPassword" class="input-field" placeholder="New Password" style="flex:1;min-width:150px;">
+                        <button id="btnChangePassword" class="btn btn-primary btn-sm">Change Password</button>
+                    </div>
+                    <div id="passwordChangeStatus" style="font-size:11px;padding-top:6px;color:var(--text-muted);"></div>
+                </div>
+
+                <div class="card">
+                    <span class="card-title">About</span>
+                    <div style="font-size:11px;color:var(--text-secondary);line-height:1.6;padding-top:4px;">
+                        <strong>ANTrax ML Checker</strong> v<%= version %><br>
+                        Advanced account security platform with WAF bypass technology.
+                    </div>
+                </div>
+            </div>
+
+            <!-- Admin Page -->
+            <% if (user && user.isAdmin) { %>
+            <div id="page-admin" class="page">
+                <div class="card">
+                    <div class="card-row">
+                        <span class="card-title">User Management</span>
+                        <span class="spacer"></span>
+                        <span id="userCount" class="text-muted" style="font-size:11px;">0 users</span>
+                    </div>
+                    <div style="font-size:11px;color:var(--text-muted);">Create and manage user accounts</div>
+                    
+                    <div style="display:flex;gap:8px;padding-top:10px;flex-wrap:wrap;">
+                        <input type="text" id="userUsername" class="input-field" placeholder="Username" style="flex:1;min-width:120px;">
+                        <input type="password" id="userPassword" class="input-field" placeholder="Password" style="flex:1;min-width:120px;">
+                        <button id="btnAddUser" class="btn btn-primary">Add User</button>
+                    </div>
+                    
+                    <div id="userList" class="user-list"></div>
+                    <div style="font-size:9px;color:var(--text-muted);padding-top:6px;font-family:monospace;">Users need "Can Check" permission to use the checker</div>
+                </div>
+
+                <div class="card">
+                    <div class="card-row">
+                        <span class="card-title">Device Management</span>
+                        <span class="spacer"></span>
+                        <span id="deviceCount" class="text-muted" style="font-size:11px;">0 devices</span>
+                    </div>
+                    <div style="font-size:11px;color:var(--text-muted);">Device IDs for info fetching (must start with "and_")</div>
+                    <div id="devicesList" class="device-list"></div>
+                    <div style="display:flex;gap:8px;padding-top:10px;flex-wrap:wrap;">
+                        <input type="text" id="deviceInput" class="input-field mono" placeholder="and_xxxxxxxx..." style="flex:1;min-width:200px;">
+                        <button id="btnAddDevice" class="btn btn-primary btn-sm">Add Device</button>
+                        <button id="btnUploadDevices" class="btn btn-secondary btn-sm">Upload .txt</button>
+                        <input type="file" id="deviceFileInput" accept=".txt" style="display:none;">
+                    </div>
+                    <div style="font-size:9px;color:var(--text-muted);padding-top:4px;">Upload a text file with one device ID per line</div>
+                </div>
+
+                <div class="card">
+                    <div class="card-row">
+                        <span class="card-title">System Statistics</span>
+                        <span class="spacer"></span>
+                        <button id="btnRefreshStats" class="btn btn-secondary btn-sm">Refresh</button>
+                    </div>
+                    <div id="systemStats" style="font-size:11px;color:var(--text-secondary);line-height:1.8;padding-top:6px;">
+                        <div>Total Requests: <span id="statTotalRequests">0</span></div>
+                        <div>Current Tokens: <span id="statCurrentTokens">0</span></div>
+                        <div>Pool Size: <span id="statPoolSize">0</span></div>
+                        <div>Online Servers: <span id="statOnlineServers">0</span>/<span id="statTotalServers">0</span></div>
+                        <div>Uptime: <span id="statUptime">0s</span></div>
+                    </div>
+                </div>
+            </div>
+            <% } %>
+        </div>
+    </div>
+
+    <script src="/script.js"></script>
+</body>
+</html>
